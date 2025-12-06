@@ -6,6 +6,7 @@ import cv2
 import os
 from werkzeug.utils import secure_filename
 from configuration import MODEL_PATH, UPLOAD_FOLDER, ALLOWED_EXTENSIONS
+from utils.function_helpler import allowed_file, extract_color_features
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS untuk akses dari frontend
@@ -35,43 +36,6 @@ try:
 except Exception as e:
     print(f"✗ Error loading model: {e}")
     MODEL = None
-
-# ========================================
-# HELPER FUNCTIONS
-# ========================================
-
-def allowed_file(filename):
-    """Cek apakah file extension diizinkan"""
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-def extract_color_features(image_path):
-    """
-    Ekstrak fitur warna dari gambar (sama seperti saat training)
-    """
-    img = cv2.imread(image_path)
-    
-    if img is None:
-        return None
-    
-    img = cv2.resize(img, (224, 224))
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    
-    mean_rgb = np.mean(img, axis=(0, 1))
-    std_rgb = np.std(img, axis=(0, 1))
-    mean_hsv = np.mean(hsv, axis=(0, 1))
-    std_hsv = np.std(hsv, axis=(0, 1))
-    
-    hist_hue = cv2.calcHist([hsv], [0], None, [32], [0, 180])
-    hist_hue = hist_hue.flatten() / hist_hue.sum()
-    
-    hist_sat = cv2.calcHist([hsv], [1], None, [32], [0, 256])
-    hist_sat = hist_sat.flatten() / hist_sat.sum()
-    
-    features = np.concatenate([
-        mean_rgb, std_rgb, mean_hsv, std_hsv, hist_hue, hist_sat
-    ])
-    
-    return features
 
 def predict_ripeness(image_path):
     """
@@ -119,7 +83,7 @@ def predict_ripeness(image_path):
     second_prob = sorted_probs[1] * 100
     
     # Threshold untuk validasi
-    MIN_CONFIDENCE = 70.0  # Minimum confidence untuk dianggap valid
+    MIN_CONFIDENCE = 65.0  # Minimum confidence untuk dianggap valid
     MIN_GAP = 20.0  # Minimum gap antara top-1 dan top-2
     
     # Check validasi
@@ -135,20 +99,30 @@ def predict_ripeness(image_path):
     elif (max_prob - second_prob) < MIN_GAP:
         is_valid = False
         rejection_reason = "model_uncertain"
-    
-    # Return result dengan validasi
-    result = {
-        'prediction': predicted_label,
-        'confidence': float(confidence),
-        'all_probabilities': all_probabilities,
-        'is_valid_banana': is_valid,
-        'validation': {
-            'passed': is_valid,
-            'max_confidence': float(max_prob),
-            'confidence_gap': float(max_prob - second_prob),
-            'reason': rejection_reason if not is_valid else 'valid_banana_image'
+        
+    if is_valid == False:
+        result = {
+            'is_valid_banana': is_valid,
+            'validation': {
+                'passed': is_valid,
+                'max_confidence': float(max_prob),
+                'confidence_gap': float(max_prob - second_prob),
+                'reason': rejection_reason if not is_valid else 'valid_banana_image'
+            }
         }
-    }
+    else:
+        result = {
+            'prediction': predicted_label,
+            'confidence': float(confidence),
+            'all_probabilities': all_probabilities,
+            'is_valid_banana': is_valid,
+            'validation': {
+                'passed': is_valid,
+                'max_confidence': float(max_prob),
+                'confidence_gap': float(max_prob - second_prob),
+                'reason': rejection_reason if not is_valid else 'valid_banana_image'
+            }
+        }
     
     return result
 
