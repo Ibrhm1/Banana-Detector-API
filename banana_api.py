@@ -2,16 +2,16 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pickle
 import numpy as np
+import cv2
 import os
 from werkzeug.utils import secure_filename
 
-from configuration import MODEL_PATH, UPLOAD_FOLDER,ALLOWED_EXTENSIONS
+from configuration import MODEL_PATH, UPLOAD_FOLDER, ALLOWED_EXTENSIONS
 from utils.function_helpler import allowed_file, extract_color_features
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS untuk akses dari frontend
 
-# Konfigurasi
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Max 16MB
 
@@ -37,17 +37,14 @@ try:
 except Exception as e:
     print(f"✗ Error loading model: {e}")
     MODEL = None
-    SCALER = None
-    LABEL_MAPPING = None
-    LABEL_NMAES_ID = None
 
 # ========================================
-# PREDICT FUNCTIONS
+# HELPER FUNCTIONS
 # ========================================
 
 def predict_ripeness(image_path):
     """
-    Prediksi tingkat kematangan pisang
+    Prediksi tingkat kematangan pisang dengan validasi
     """
     # Extract features
     features = extract_color_features(image_path)
@@ -81,12 +78,48 @@ def predict_ripeness(image_path):
         for i in range(len(probabilities))
     }
     
-    return {
+    # ============================================
+    # VALIDASI: Deteksi gambar bukan pisang
+    # ============================================
+    
+    # Ambil 2 probabilitas tertinggi
+    sorted_probs = sorted(probabilities, reverse=True)
+    max_prob = sorted_probs[0] * 100
+    second_prob = sorted_probs[1] * 100
+    
+    # Threshold untuk validasi
+    MIN_CONFIDENCE = 55.0  # Minimum confidence untuk dianggap valid
+    MIN_GAP = 20.0  # Minimum gap antara top-1 dan top-2
+    
+    # Check validasi
+    is_valid = True
+    rejection_reason = None
+    
+    # Kondisi 1: Confidence terlalu rendah
+    if max_prob < MIN_CONFIDENCE:
+        is_valid = False
+        rejection_reason = "confidence_too_low"
+    
+    # Kondisi 2: Gap antara top-2 terlalu kecil (model ragu)
+    elif (max_prob - second_prob) < MIN_GAP:
+        is_valid = False
+        rejection_reason = "model_uncertain"
+    
+    # Return result dengan validasi
+    result = {
         'prediction': predicted_label,
         'confidence': float(confidence),
-        'all_probabilities': all_probabilities
+        'all_probabilities': all_probabilities,
+        'is_valid_banana': is_valid,
+        'validation': {
+            'passed': is_valid,
+            'max_confidence': float(max_prob),
+            'confidence_gap': float(max_prob - second_prob),
+            'reason': rejection_reason if not is_valid else 'valid_banana_image'
+        }
     }
-
+    
+    return result
 
 # ========================================
 # API ENDPOINTS
@@ -147,8 +180,8 @@ def predict():
         # Prediksi
         result = predict_ripeness(filepath)
         
-        # # Hapus file setelah prediksi
-        # os.remove(filepath)
+        # Hapus file setelah prediksi
+        os.remove(filepath)
         
         if result is None:
             return jsonify({
@@ -193,12 +226,12 @@ def get_classes():
     return jsonify({
         'success': True,
         'data': {
-            'classes': list(LABEL_MAPPING.keys()),
+            'classes': list(LABEL_NAMES_ID.values()),
             'descriptions': {
-                'unripe': 'Pisang mentah (hijau)',
-                'ripe': 'Pisang matang sempurna (kuning)',
-                'overripe': 'Pisang terlalu matang (kuning kehitaman)',
-                'rotten': 'Pisang busuk (coklat/hitam)'
+                'mentah': 'Pisang mentah (hijau)',
+                'matang': 'Pisang matang sempurna (kuning)',
+                'terlalu_matang': 'Pisang terlalu matang (kuning kehitaman)',
+                'busuk': 'Pisang busuk (coklat/hitam)'
             }
         }
     })
