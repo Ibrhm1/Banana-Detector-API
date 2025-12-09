@@ -1,4 +1,4 @@
-# 🍌 Banana Ripeness Classification API (Backend)
+# 🍌 Banana Detector API (Backend)
 
 REST API untuk klasifikasi tingkat kematangan pisang menggunakan model SVM hasil training di Google Colab.
 
@@ -9,23 +9,6 @@ REST API untuk klasifikasi tingkat kematangan pisang menggunakan model SVM hasil
 - Prediksi kematangan pisang dari gambar (unripe, ripe, overripe, rotten)
 - Upload gambar via endpoint API
 - Mendukung integrasi dengan frontend (Next.js)
-- Menyimpan file upload di folder `uploads/`
-
----
-
-## 📦 Struktur Folder
-
-```
-backend-fastapi/
-├── banana_api.py                 # REST API utama
-├── banana_svm_best_model.pkl     # Model SVM hasil training
-├── configuration.py              # Konfigurasi path & ekstensi
-├── requirements.txt              # Daftar dependensi Python
-├── uploads/                      # Folder upload gambar
-├── utils/
-│   └── function_helpler.py       # Helper function (ekstraksi fitur, dsb)
-└── Dockerfile                    # Konfigurasi Docker
-```
 
 ---
 

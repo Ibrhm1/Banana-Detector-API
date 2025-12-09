@@ -83,20 +83,22 @@ def predict_ripeness(image_path):
     second_prob = sorted_probs[1] * 100
     
     # Threshold untuk validasi
-    MIN_CONFIDENCE = 65.0  # Minimum confidence untuk dianggap valid
-    MIN_GAP = 20.0  # Minimum gap antara top-1 dan top-2
+    # MIN_CONFIDENCE = Minimum confidence untuk dianggap valid
+    # MIN_GAP = Minimum gap antara top-1 dan top-2
+    MIN_CONFIDENCE = 65.0
+    MIN_GAP = 26.0
     
     # Check validasi
     is_valid = True
     rejection_reason = None
     
     # Kondisi 1: Confidence terlalu rendah
-    if max_prob < MIN_CONFIDENCE:
+    if max_prob <= MIN_CONFIDENCE:
         is_valid = False
         rejection_reason = "confidence_too_low"
     
     # Kondisi 2: Gap antara top-2 terlalu kecil (model ragu)
-    elif (max_prob - second_prob) < MIN_GAP:
+    elif (max_prob - second_prob) <= MIN_GAP:
         is_valid = False
         rejection_reason = "model_uncertain"
         
