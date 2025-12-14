@@ -7,8 +7,8 @@ import os
 from werkzeug.utils import secure_filename
 
 from utils.function_helpler import allowed_file
+from utils.configuration import UPLOAD_FOLDER, MODEL_PATH, ALLOWED_EXTENSIONS
 from services.predict_banana import predict_ripeness
-from configuration import UPLOAD_FOLDER, MODEL_PATH, ALLOWED_EXTENSIONS
 
 app = Flask(__name__)
 CORS(app)

@@ -1,4 +1,4 @@
-from configuration import ALLOWED_EXTENSIONS
+from utils.configuration import ALLOWED_EXTENSIONS
 
 def allowed_file(filename):
     """Check if file extension is allowed"""
