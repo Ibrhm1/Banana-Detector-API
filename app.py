@@ -1,14 +1,14 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import pickle
-import numpy as np
-import cv2
+import json
+import onnxruntime as rt
 import os
 from werkzeug.utils import secure_filename
 
 from utils.function_helpler import allowed_file
-from utils.configuration import UPLOAD_FOLDER, MODEL_PATH, ALLOWED_EXTENSIONS
+from utils.configuration import UPLOAD_FOLDER, ALLOWED_EXTENSIONS
 from services.predict_banana import predict_ripeness
+
 
 app = Flask(__name__)
 CORS(app)
@@ -19,24 +19,30 @@ app.config['MAX_CONTENT_LENGTH'] = 3 * 1024 * 1024  # Max 3MB
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # ============================================================
-# LOAD MODEL
+# LOAD MODEL (ONNX)
 # ============================================================
+
+MODEL_PATH = os.path.join(os.path.dirname(__file__), 'models/model.onnx')
+METADATA_PATH = os.path.join(os.path.dirname(__file__), 'models/metadata.json')
 
 print("Loading model...")
 try:
-    with open(MODEL_PATH, 'rb') as f:
-        model_data = pickle.load(f)
+    # Load ONNX Model
+    MODEL = rt.InferenceSession(MODEL_PATH)
     
-    MODEL = model_data['model']
-    SCALER = model_data['scaler']
-    LABEL_MAPPING = model_data['label_mapping']
-    LABEL_NAMES_ID = model_data['label_names_id']
+    # Load Metadata
+    with open(METADATA_PATH, 'r') as f:
+        LABEL_NAMES_ID = json.load(f)
+        # Convert keys to integers since JSON keys are always strings
+        LABEL_NAMES_ID = {int(k): v for k, v in LABEL_NAMES_ID.items()}
     
-    print("✓ Model loaded successfully!")
+    print("✓ Model (ONNX) loaded successfully!")
     print(f"  Classes: {list(LABEL_NAMES_ID.values())}")
+
 except Exception as e:
     print(f"✗ Error loading model: {e}")
     MODEL = None
+    LABEL_NAMES_ID = {}
 
 # ============================================================
 # API ENDPOINTS
@@ -93,7 +99,7 @@ def predict():
         file.save(filepath)
         
         # Predict
-        result = predict_ripeness(filepath, MODEL, SCALER, LABEL_NAMES_ID)
+        result = predict_ripeness(filepath, MODEL, LABEL_NAMES_ID)
         
         # Delete file
         os.remove(filepath)
@@ -128,10 +134,9 @@ def model_info():
         'success': True,
         'data': {
             'classes': list(LABEL_NAMES_ID.values()),
-            'kernel': MODEL.kernel,
-            'n_support': MODEL.n_support_.tolist(),
-            'model_type': 'Support Vector Machine (SVM)',
-            'feature_count': SCALER.n_features_in_
+            'model_type': 'ONNX Runtime (SVM)',
+            'input_name': MODEL.get_inputs()[0].name,
+            'input_shape': str(MODEL.get_inputs()[0].shape)
         }
     })
 

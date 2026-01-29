@@ -2,9 +2,9 @@ from services.feature_extraction import extract_color_features
 import numpy as np
 import cv2
 
-def predict_ripeness(image_path, MODEL, SCALER, LABEL_NAMES_ID):
+def predict_ripeness(image_path, MODEL, LABEL_NAMES_ID):
     """
-    Predict banana ripeness with threshold validation
+    Predict banana ripeness with ONNX model
     """
     # Extract features
     features = extract_color_features(image_path)
@@ -12,18 +12,29 @@ def predict_ripeness(image_path, MODEL, SCALER, LABEL_NAMES_ID):
     if features is None:
         return None
     
-    # Reshape and scale
-    features = features.reshape(1, -1)
-    features_scaled = SCALER.transform(features)
+    # Reshape features for ONNX (float32)
+    features = features.reshape(1, -1).astype(np.float32)
     
-    # Predict
-    prediction = MODEL.predict(features_scaled)[0]
-    decision_scores = MODEL.decision_function(features_scaled)[0]
+    # Predict using ONNX Runtime
+    input_name = MODEL.get_inputs()[0].name
+    label_name = MODEL.get_outputs()[0].name
+    proba_name = MODEL.get_outputs()[1].name
     
-    # Convert to probability-like scores
-    exp_scores = np.exp(decision_scores - np.max(decision_scores))
-    probabilities = exp_scores / exp_scores.sum()
+    pred_onx = MODEL.run([label_name, proba_name], {input_name: features})
     
+    prediction = pred_onx[0][0]  # First sample, Label
+    probabilities_output = pred_onx[1][0] # First sample, Probabilities
+    
+    # Handle both Dict (ZipMap=True) and Array (ZipMap=False) output from ONNX
+    if isinstance(probabilities_output, dict):
+        num_classes = len(LABEL_NAMES_ID)
+        probabilities = np.zeros(num_classes)
+        for i in range(num_classes):
+            probabilities[i] = probabilities_output.get(i, 0.0)
+    else:
+        # It's already a numpy array of probabilities
+        probabilities = probabilities_output
+
     # Get labels
     predicted_label = LABEL_NAMES_ID[prediction]
     confidence = probabilities[prediction] * 100
